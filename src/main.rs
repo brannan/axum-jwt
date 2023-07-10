@@ -1,13 +1,11 @@
-#![allow(unused)]
 use axum::{
     async_trait,
     extract::FromRequestParts,
+    headers::{authorization::Bearer, Authorization},
     http::{request::Parts, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json, RequestPartsExt, Router,
-    TypedHeader,
-    headers::{authorization::Bearer, Authorization},
+    Json, RequestPartsExt, Router, TypedHeader,
 };
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use once_cell::sync::Lazy;
@@ -48,8 +46,9 @@ static KEYS: Lazy<Keys> = Lazy::new(|| {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env()
-              .unwrap_or_else(|_| "example_jwt=debug".into()),
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "example_jwt=debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -57,7 +56,7 @@ async fn main() {
     let app = Router::new()
         .route("/protected", get(protected))
         .route("/authorize", post(authorize));
-   
+
     let ip = "127.0.0.1:3456";
     axum::Server::bind(&ip.parse().unwrap())
         .serve(app.into_make_service())
@@ -68,11 +67,14 @@ async fn main() {
 }
 
 /// Validated route
-async fn protected(claims: Claims) -> Result<String, AuthError>{
-    Ok(format!("Welcome to protected area: \nYour data:\n{}", claims))
+async fn protected(claims: Claims) -> Result<String, AuthError> {
+    Ok(format!(
+        "Welcome to protected area: \nYour data:\n{}",
+        claims
+    ))
 }
 
-/// 
+/// Handler to generate a token
 async fn authorize(Json(payload): Json<AuthPayload>) -> Result<Json<AuthBody>, AuthError> {
     tracing::debug!("Authenticating: {:?}", payload);
     if payload.client_id.is_empty() || payload.client_secret.is_empty() {
@@ -99,7 +101,7 @@ impl Display for Claims {
 }
 
 impl AuthBody {
-    fn new(access_token:String) -> Self {
+    fn new(access_token: String) -> Self {
         Self {
             access_token,
             token_type: "bearer".to_string(),
@@ -132,7 +134,6 @@ where
     }
 }
 
-
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
@@ -141,9 +142,7 @@ impl IntoResponse for AuthError {
             AuthError::TokenCreation => (StatusCode::INTERNAL_SERVER_ERROR, "Token creation"),
             AuthError::InvalidToken => (StatusCode::UNAUTHORIZED, "Invalid token"),
         };
-        let body = Json(json!({ 
-            "error": error_message 
-        }));
+        let body = Json(json!({ "error": error_message }));
         (status, body).into_response()
     }
 }
@@ -180,7 +179,6 @@ struct AuthPayload {
     client_id: String,
     client_secret: String,
 }
-
 
 #[derive(Debug)]
 enum AuthError {
