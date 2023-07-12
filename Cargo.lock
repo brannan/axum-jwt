@@ -193,11 +193,13 @@ name = "example-jwt"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "hyper",
  "jsonwebtoken",
  "once_cell",
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]
