@@ -2,7 +2,7 @@ use axum::{
     async_trait,
     extract::FromRequestParts,
     http::{request::Parts, Request, StatusCode},
-    middleware::{Next, from_fn},
+    middleware::{from_fn, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fmt::Display;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
 
 static KEYS: Lazy<Keys> = Lazy::new(|| {
     let secret = std::env::var("JWT_SECRET").unwrap_or("my_secret".to_string());
@@ -51,7 +50,9 @@ fn app() -> Router {
 
 /// Validated route
 async fn protected(ctx: Ctx) -> Result<Json<Value>, AuthError> {
-    Ok( Json( json!({ "message": format!("Welcome {}", ctx.claims) })))
+    Ok(Json(json!({
+        "message": format!("Welcome {}", ctx.claims)
+    })))
 }
 
 /// Make a dummy token
@@ -61,10 +62,8 @@ fn make_token() -> Result<String, AuthError> {
         company: "ACME".to_owned(),
         exp: 2_000_000_000,
     };
-    encode(&Header::default(), &claims, &KEYS.encoding)
-        .map_err(|_| AuthError::TokenCreation)
+    encode(&Header::default(), &claims, &KEYS.encoding).map_err(|_| AuthError::TokenCreation)
 }
-
 
 /// Handler to generate a token
 async fn authorize(Json(payload): Json<AuthPayload>) -> Result<Json<AuthBody>, AuthError> {
@@ -96,16 +95,14 @@ impl AuthBody {
     }
 }
 
-/// Midleware to parse token from header, put in ctx, and insert into requst extensions. 
+/// Midleware to parse token from header, put in ctx, and insert into requst extensions.
 /// Should never return an error. Should context extraction fail, the error will be put in
 /// the request extensions. The failure to extract the context will be handled by the
 /// require auth middleware.
-pub async fn mw_ctx_resolver<B>(
-    mut req: Request<B>,
-    next: Next<B>,
-    ) -> Result<Response, AuthError> {
+pub async fn mw_ctx_resolver<B>(mut req: Request<B>, next: Next<B>) -> Result<Response, AuthError> {
     tracing::debug!("mw_ctx_resolver");
-    let auth_header: Option<&str> = req.headers()
+    let auth_header: Option<&str> = req
+        .headers()
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|header| header.to_str().ok());
     tracing::debug!("mw_ctx_resolver auth_header: {:?}", auth_header);
@@ -116,20 +113,19 @@ pub async fn mw_ctx_resolver<B>(
         .map(|data| Ctx::new(data.claims));
 
     // TODO check claims against db?
-    req.extensions_mut().insert(ctx.ok_or(AuthError::InvalidToken));
-
-    tracing::debug!("mw_ctx_resolver finished");
+    req.extensions_mut()
+        .insert(ctx.ok_or(AuthError::InvalidToken));
 
     Ok(next.run(req).await)
 }
 
-/// Use this middleware if auth is required. If mw_ctx_resolver did not insert 
+/// Use this middleware if auth is required. If mw_ctx_resolver did not insert
 /// a context in the request extensions, this middleware will return an error.
 pub async fn mw_require_auth<B>(
     ctx: Result<Ctx, AuthError>,
     req: Request<B>,
     next: Next<B>,
-    ) -> Result<Response, AuthError> {
+) -> Result<Response, AuthError> {
     tracing::debug!("mw_require_auth");
     ctx?;
     Ok(next.run(req).await)
@@ -137,10 +133,7 @@ pub async fn mw_require_auth<B>(
 
 // extractor for Ctx
 #[async_trait]
-impl<S> FromRequestParts<S> for Ctx
-where
-    S: Send + Sync,
-{
+impl<S: Send + Sync> FromRequestParts<S> for Ctx {
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
@@ -152,31 +145,6 @@ where
             .clone()
     }
 }
-
-/// Extractor the produces a Claims struct from a header.
-// #[async_trait]
-// impl<S> FromRequestParts<S> for Claims
-// where
-//     S: Send + Sync,
-// {
-//     type Rejection = AuthError;
-
-//     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-//         // Extract the token from the authorization header
-//         let TypedHeader(Authorization(bearer)) = parts
-//             .extract::<TypedHeader<Authorization<Bearer>>>()
-//             .await
-//             .map_err(|_| AuthError::InvalidToken)?;
-
-//         tracing::debug!("Bearer token: {:?}", bearer);
-
-//         // Decode the user data
-//         let token_data = decode::<Claims>(bearer.token(), &KEYS.decoding, &Validation::default())
-//             .map_err(|_| AuthError::InvalidToken)?;
-
-//         Ok(token_data.claims)
-//     }
-// }
 
 struct Keys {
     encoding: EncodingKey,
